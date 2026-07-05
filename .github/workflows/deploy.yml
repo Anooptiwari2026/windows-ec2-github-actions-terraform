@@ -1,37 +1,51 @@
-name: Provision t3.micro EC2
+name: Provision Windows EC2
 
 on:
   workflow_dispatch:
     inputs:
-      ec2-name:
-        description: EC2 name
+      ec2_name:
+        description: "EC2 Instance Name"
         required: true
-        default: 'App Server'
+        default: "App Server"
         type: string
+
 jobs:
-  provision-ec2:
+  terraform:
+    name: Terraform Deploy
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_VAR_ec2_name: ${{ github.event.inputs.ec2_name }}
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          node-version: '14'
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: '${{ secrets.TF_USER_AWS_KEY }}'
-          aws-secret-access-key: '${{ secrets.TF_USER_AWS_SECRET }}'
+          aws-access-key-id: ${{ secrets.TF_USER_AWS_KEY }}
+          aws-secret-access-key: ${{ secrets.TF_USER_AWS_SECRET }}
           aws-region: us-east-2
+
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
       - name: Terraform Apply
-        id:   apply
-        env:
-          TF_VAR_ec2_name:  "${{ github.event.inputs.ec2-name }}"
-        run: |
-          terraform init
-          terraform validate
-          terraform plan 
-          terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
